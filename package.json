@@ -1,0 +1,14 @@
+{
+  "name": "2e2e",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+   "start":"  spark-submit ./src/jobs/spark-streaming.py ",
+   "env": "source pyspark-env/bin/activate",
+   "logs":"docker exec -it kafka kafka-console-consumer --bootstrap-server localhost:29092 --topic detections_topic --from-beginning"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
