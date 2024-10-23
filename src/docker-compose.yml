@@ -1,0 +1,115 @@
+version: "3"
+
+services:
+  
+  spark-master:
+    depends_on:
+      - kafka
+      - mongodb
+    links:
+      - mongodb
+    container_name: spark-master
+    image: bitnami/spark:latest
+    environment:
+      - SPARK_EXTRA_CLASSPATH=/opt/bitnami/spark/jars/*
+      - SPARK_EXECUTOR_MEMORY=2G
+      - SPARK_TOTAL_EXECUTOR_CORES=2
+    # command: >
+    #  spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 /opt/bitnami/spark/jobs/spark-streaming.py
+    # entrypoint:
+    #   [
+    #     "/bin/bash",
+    #     "-c",
+    #     "pip install --upgrade pip setuptools && pip install -r /requirements.txt && /entrypoint.sh /run.sh",
+    #   ]
+
+
+    volumes:
+      - ./mongo-spark-connector_2.12-10.1.1.jar:/opt/bitnami/spark/jars/mongo-spark-connector_2.12-10.1.1.jar
+      - ./config:/opt/bitnami/spark/config
+      - ./jobs:/opt/bitnami/spark/jobs
+      - ./datasets:/opt/bitnami/spark/datasets
+      - ./requirements.txt:/requirements.txt
+    networks:
+      - spark-network
+    ports:
+      - "9090:8080"
+      - "7077:7077"
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - spark-network
+  kafka:
+    
+     
+    container_name: kafka
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_CREATE_TOPICS: "c:1:1"  # This will create 'detections_topic' with 1 partition and replication factor of 1
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+    # command:
+    #   - sh -c '"/etc/confluent/docker/run & \
+    #             sleep 5; \
+    #             kafka-topics --create --topic detections_topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1"'
+    ports:
+      - "9092:9092" # For internal Docker connections
+      - "29092:29092" # For external connections from localhost
+    networks:
+      - spark-network
+  mongodb:
+    container_name: mongodb
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    networks:
+      - spark-network
+  spark-worker: &worker
+    container_name: spark-worker
+    hostname: spark-worker
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    volumes:
+      - ./mongo-spark-connector_2.12-10.1.1.jar:/opt/bitnami/spark/jars/mongo-spark-connector_2.12-10.1.1.jar
+      - ./config:/opt/bitnami/spark/config
+      - ./jobs:/opt/bitnami/spark/jobs
+      - ./datasets:/opt/bitnami/spark/datasets
+      - ./requirements.txt:/requirements.txt
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_MODE: worker
+      SPARK_WORKER_CORES: 1
+      SPARK_WORKER_MEMORY: 1g
+      SPARK_MASTER_URL: spark://spark-master:7077
+    networks:
+      - spark-network
+    ports:
+      - "8081:8081"
+  
+  #  spark-worker-2:
+#    <<: *worker
+#
+#  spark-worker-3:
+#    <<: *worker
+#
+#  spark-worker-4:
+#    <<: *worker
+networks:
+  spark-network:
+    name: spark-network # This removes the prefix
+    external: true
