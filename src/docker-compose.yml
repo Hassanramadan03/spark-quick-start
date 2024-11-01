@@ -32,8 +32,11 @@ services:
       - ./requirements.txt:/requirements.txt
     networks:
       - spark-network
+    expose:
+      - 8000
     ports:
       - "9090:8080"
+      - "3030:8000"
       - "7077:7077"
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
@@ -76,6 +79,9 @@ services:
       - "27017:27017"
     networks:
       - spark-network
+    volumes:
+     - mongodb_data:/data/db  
+    
   spark-worker: &worker
     container_name: spark-worker
     hostname: spark-worker
@@ -113,3 +119,5 @@ networks:
   spark-network:
     name: spark-network # This removes the prefix
     external: true
+volumes:
+  mongodb_data:
